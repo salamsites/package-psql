@@ -9,8 +9,7 @@ import (
 	"time"
 )
 
-func NewClient(ctx context.Context, options Options) (client Client, err error) {
-
+func NewClient(ctx context.Context, options Options) (Client, error) {
 	log.Println("new client options")
 	log.Println("🔔 Host: ", options.Host)
 	log.Println("🔔 Port: ", options.Port)
@@ -20,44 +19,38 @@ func NewClient(ctx context.Context, options Options) (client Client, err error) 
 	log.Println("🔔 PgPoolMaxConn: ", options.PgPoolMaxConn)
 
 	connPool, err := pgxpool.NewWithConfig(ctx, getConfig(options))
-
 	if err != nil {
 		return nil, errors.New("🚫 Error while creating connection to the database!!")
 	}
 
 	connection, err := connPool.Acquire(ctx)
-
 	if err != nil {
 		return nil, errors.New("🚫 Error while acquiring connection from the database pool!!")
 	}
-
 	defer connection.Release()
 
-	err = connection.Ping(ctx)
-
+	err = connection.Conn().Ping(ctx)
 	if err != nil {
 		return nil, errors.New("🚫 Could not ping database")
 	}
 
 	log.Println("✅ postgresql connected success")
-
-	//return &Pool{connPool}, nil
-	return connPool, nil
+	return &clientImpl{pool: connPool}, nil
 }
 
 func getConfig(options Options) *pgxpool.Config {
-
-	DatabaseUrl := fmt.Sprintf(
+	databaseURL := fmt.Sprintf(
 		"postgresql://%s:%s@%s:%s/%s",
 		options.Username,
 		options.Password,
 		options.Host,
 		options.Port,
-		options.Database)
+		options.Database,
+	)
 
-	log.Println("🔔 database url: ", DatabaseUrl)
+	log.Println("🔔 database url: ", databaseURL)
 
-	dbConfig, err := pgxpool.ParseConfig(DatabaseUrl)
+	dbConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		log.Println("🚫 Failed to create a config, error: ", err)
 	}
@@ -68,18 +61,6 @@ func getConfig(options Options) *pgxpool.Config {
 	dbConfig.MaxConnIdleTime = time.Minute * 30
 	dbConfig.HealthCheckPeriod = time.Minute
 	dbConfig.ConnConfig.ConnectTimeout = time.Second * 5
-
-	//dbConfig.BeforeAcquire = func(ctx context.Context, c *pgx.Conn) bool {
-	//	return true
-	//}
-	//
-	//dbConfig.AfterRelease = func(c *pgx.Conn) bool {
-	//	return true
-	//}
-	//
-	//dbConfig.BeforeClose = func(c *pgx.Conn) {
-	//	fmt.Println("Closed the connection pool to the database!!")
-	//}
 
 	return dbConfig
 }
