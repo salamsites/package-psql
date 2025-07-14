@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"log"
 	"time"
 )
@@ -35,7 +37,30 @@ func NewClient(ctx context.Context, options Options) (Client, error) {
 	}
 
 	log.Println("✅ postgresql connected success")
-	return &clientImpl{pool: connPool}, nil
+
+	// *sql.DB oluşturmak için pgx stdlib paketini kullanıyoruz
+	connStr := fmt.Sprintf(
+		"postgresql://%s:%s@%s:%s/%s",
+		options.Username,
+		options.Password,
+		options.Host,
+		options.Port,
+		options.Database,
+	)
+	config, err := pgx.ParseConfig(connStr)
+	if err != nil {
+		return nil, err
+	}
+	stdDB := stdlib.OpenDB(*config)
+
+	if err := stdDB.PingContext(ctx); err != nil {
+		return nil, errors.New("🚫 Could not ping stdDB")
+	}
+
+	return &clientImpl{
+		pool:  connPool,
+		stdDB: stdDB,
+	}, nil
 }
 
 func getConfig(options Options) *pgxpool.Config {

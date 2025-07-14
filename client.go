@@ -2,6 +2,7 @@ package package_psql
 
 import (
 	"context"
+	"database/sql"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,12 +15,13 @@ type Client interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
 	Close()
-	Pool() *pgxpool.Pool // optional, to access raw pool for trmpgx
+	Pool() *pgxpool.Pool
+	StdDB() *sql.DB // optional, to access raw pool for trmpgx
 }
 
-// clientImpl implements the Client interface
 type clientImpl struct {
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
+	stdDB *sql.DB
 }
 
 func (c *clientImpl) Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error) {
@@ -44,8 +46,15 @@ func (c *clientImpl) SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResul
 
 func (c *clientImpl) Close() {
 	c.pool.Close()
+	if c.stdDB != nil {
+		_ = c.stdDB.Close()
+	}
 }
 
 func (c *clientImpl) Pool() *pgxpool.Pool {
 	return c.pool
+}
+
+func (c *clientImpl) StdDB() *sql.DB {
+	return c.stdDB
 }
